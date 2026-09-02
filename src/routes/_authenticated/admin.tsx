@@ -56,12 +56,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { supabase } from "@/lib/supabase";
 import {
@@ -70,16 +65,14 @@ import {
   QR_BASE_URL,
   getCardQrUrl,
   DEFAULT_GOOGLE_REVIEW_LINKS,
+  getDefaultReviewLink,
   normalizeUrl,
   isValidUrl,
 } from "@/lib/qr-config";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
-    meta: [
-      { title: "QR Redirect Manager — DRFT Admin" },
-      { name: "robots", content: "noindex" },
-    ],
+    meta: [{ title: "QR Redirect Manager — DRFT Admin" }, { name: "robots", content: "noindex" }],
   }),
   component: AdminPage,
 });
@@ -90,10 +83,7 @@ export const Route = createFileRoute("/_authenticated/admin")({
 
 async function fetchCardsFromDb(): Promise<QrCard[]> {
   try {
-    const { data, error } = await supabase
-      .from("qr_cards")
-      .select("*")
-      .order("id");
+    const { data, error } = await supabase.from("qr_cards").select("*").order("id");
     if (error) {
       console.warn("Could not fetch cards from Supabase:", error.message);
       return [];
@@ -133,9 +123,7 @@ function StatCard({
           {label}
         </span>
       </div>
-      <p className="font-display text-3xl font-bold text-foreground sm:text-4xl">
-        {value}
-      </p>
+      <p className="font-display text-3xl font-bold text-foreground sm:text-4xl">{value}</p>
     </div>
   );
 }
@@ -226,7 +214,10 @@ function EditDialog({ card, onClose, onSave, saving }: EditDialogProps) {
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="font-mono text-sm px-2.5 py-0.5 border-primary text-primary">
+            <Badge
+              variant="outline"
+              className="font-mono text-sm px-2.5 py-0.5 border-primary text-primary"
+            >
               QR #{card?.id}
             </Badge>
             <DialogTitle className="font-display text-xl">Edit Redirect Destination</DialogTitle>
@@ -271,8 +262,8 @@ function EditDialog({ card, onClose, onSave, saving }: EditDialogProps) {
                 !urlValid
                   ? "border-destructive focus-visible:ring-destructive"
                   : destUrl
-                  ? "border-primary/50"
-                  : ""
+                    ? "border-primary/50"
+                    : ""
               }
             />
             {!urlValid && (
@@ -330,10 +321,7 @@ function EditDialog({ card, onClose, onSave, saving }: EditDialogProps) {
           {/* Status */}
           <div className="space-y-2">
             <Label htmlFor="card-status">Card Status</Label>
-            <Select
-              value={status}
-              onValueChange={(v) => setStatus(v as "active" | "inactive")}
-            >
+            <Select value={status} onValueChange={(v) => setStatus(v as "active" | "inactive")}>
               <SelectTrigger id="card-status" className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -359,12 +347,7 @@ function EditDialog({ card, onClose, onSave, saving }: EditDialogProps) {
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button
-            type="submit"
-            form="edit-form"
-            disabled={saving || !urlValid}
-            className="gap-1.5"
-          >
+          <Button type="submit" form="edit-form" disabled={saving || !urlValid} className="gap-1.5">
             {saving && <Loader2 className="size-4 animate-spin" />}
             Save Redirect
           </Button>
@@ -483,7 +466,8 @@ function SqlModal({ open, onClose }: { open: boolean; onClose: () => void }) {
             <DialogTitle>Supabase SQL Schema</DialogTitle>
           </div>
           <DialogDescription>
-            Copy and paste this into your <strong>Supabase Project → SQL Editor</strong> and click <strong>Run</strong>.
+            Copy and paste this into your <strong>Supabase Project → SQL Editor</strong> and click{" "}
+            <strong>Run</strong>.
           </DialogDescription>
         </DialogHeader>
         <div className="flex-1 overflow-auto rounded-md bg-secondary/80 p-3 font-mono text-xs border border-border">
@@ -516,14 +500,7 @@ type CardRowProps = {
   resetting: boolean;
 };
 
-function CardRow({
-  card,
-  onEdit,
-  onToggle,
-  onReset,
-  toggling,
-  resetting,
-}: CardRowProps) {
+function CardRow({ card, onEdit, onToggle, onReset, toggling, resetting }: CardRowProps) {
   const isActive = card.status === "active";
   const hasUrl = !!card.destination_url;
   const qrUrl = getCardQrUrl(card.id);
@@ -539,9 +516,7 @@ function CardRow({
       {/* Col 1: Card ID & Badge */}
       <div className="flex items-center gap-3 shrink-0">
         <div className="flex flex-col items-center">
-          <span className="font-mono text-base font-bold text-foreground">
-            {card.id}
-          </span>
+          <span className="font-mono text-base font-bold text-foreground">{card.id}</span>
           <Badge
             variant={isActive && hasUrl ? "default" : "secondary"}
             className={`text-[10px] px-1.5 py-0 mt-0.5 ${
@@ -558,9 +533,7 @@ function CardRow({
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-bold text-foreground truncate">
             {card.shop_name ?? (
-              <span className="text-muted-foreground font-normal italic">
-                Unlabeled Card
-              </span>
+              <span className="text-muted-foreground font-normal italic">Unlabeled Card</span>
             )}
           </span>
 
@@ -645,8 +618,8 @@ function CardRow({
               {!hasUrl
                 ? "Set a destination URL first"
                 : isActive
-                ? "Turn OFF redirect"
-                : "Make redirect LIVE"}
+                  ? "Turn OFF redirect"
+                  : "Make redirect LIVE"}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -691,7 +664,8 @@ function CardRow({
             <AlertDialogHeader>
               <AlertDialogTitle>Reset stats for Card {card.id}?</AlertDialogTitle>
               <AlertDialogDescription>
-                This will reset the scan counter to 0. Destination URL and active status will not be changed.
+                This will reset the scan counter to 0. Destination URL and active status will not be
+                changed.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -741,7 +715,7 @@ function AdminPage() {
       if (existing) return existing;
 
       // Default presets for 001 and 002 if not in DB yet
-      const preset = DEFAULT_GOOGLE_REVIEW_LINKS[id];
+      const preset = getDefaultReviewLink(id);
       return {
         id,
         shop_name: preset ? preset.shop_name : null,
@@ -756,18 +730,12 @@ function AdminPage() {
   }, [dbCards]);
 
   // Derived stats
-  const totalScans = useMemo(
-    () => allCards.reduce((s, c) => s + c.scan_count, 0),
-    [allCards]
-  );
+  const totalScans = useMemo(() => allCards.reduce((s, c) => s + c.scan_count, 0), [allCards]);
   const liveCount = useMemo(
     () => allCards.filter((c) => c.status === "active" && c.destination_url).length,
-    [allCards]
+    [allCards],
   );
-  const assignedCount = useMemo(
-    () => allCards.filter((c) => c.destination_url).length,
-    [allCards]
-  );
+  const assignedCount = useMemo(() => allCards.filter((c) => c.destination_url).length, [allCards]);
 
   // Filtered cards list
   const filtered = useMemo(() => {
@@ -778,8 +746,7 @@ function AdminPage() {
         c.id.includes(q) ||
         (c.shop_name ?? "").toLowerCase().includes(q) ||
         (c.destination_url ?? "").toLowerCase().includes(q);
-      const matchStatus =
-        filterStatus === "all" || c.status === filterStatus;
+      const matchStatus = filterStatus === "all" || c.status === filterStatus;
       return matchSearch && matchStatus;
     });
   }, [allCards, search, filterStatus]);
@@ -787,18 +754,16 @@ function AdminPage() {
   // Mutation: Upsert Card (works whether row exists or not)
   const saveMutation = useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: Partial<QrCard> }) => {
-      const { error } = await supabase
-        .from("qr_cards")
-        .upsert(
-          {
-            id,
-            shop_name: patch.shop_name,
-            destination_url: patch.destination_url,
-            status: patch.status,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "id" }
-        );
+      const { error } = await supabase.from("qr_cards").upsert(
+        {
+          id,
+          shop_name: patch.shop_name,
+          destination_url: patch.destination_url,
+          status: patch.status,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" },
+      );
       if (error) throw error;
     },
     onMutate: async ({ id, patch }) => {
@@ -814,8 +779,9 @@ function AdminPage() {
       });
       return { prev };
     },
-    onError: (err: any) => {
-      toast.error(`Database error: ${err.message || "Failed to save"}`);
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Failed to save";
+      toast.error(`Database error: ${msg}`);
     },
     onSuccess: () => {
       toast.success("Redirect saved successfully!");
@@ -836,17 +802,16 @@ function AdminPage() {
         updated_at: new Date().toISOString(),
       }));
 
-      const { error } = await supabase
-        .from("qr_cards")
-        .upsert(rows, { onConflict: "id" });
+      const { error } = await supabase.from("qr_cards").upsert(rows, { onConflict: "id" });
       if (error) throw error;
     },
     onSuccess: () => {
       toast.success("All 20 cards synchronized with Supabase!");
       qc.invalidateQueries({ queryKey: ["qr_cards"] });
     },
-    onError: (err: any) => {
-      toast.error(`Sync error: ${err.message || "Check Supabase permissions"}`);
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Check Supabase permissions";
+      toast.error(`Sync error: ${msg}`);
     },
   });
 
@@ -866,7 +831,7 @@ function AdminPage() {
     onMutate: async (id) => {
       setResettingId(id);
       qc.setQueryData<QrCard[]>(["qr_cards"], (old) =>
-        (old ?? []).map((c) => (c.id === id ? { ...c, scan_count: 0 } : c))
+        (old ?? []).map((c) => (c.id === id ? { ...c, scan_count: 0 } : c)),
       );
     },
     onSuccess: () => toast.success("Scan counter reset to 0"),
@@ -878,10 +843,7 @@ function AdminPage() {
 
   // Handlers
   function handleSave(id: string, patch: Partial<QrCard>) {
-    saveMutation.mutate(
-      { id, patch },
-      { onSuccess: () => setEditTarget(null) }
-    );
+    saveMutation.mutate({ id, patch }, { onSuccess: () => setEditTarget(null) });
   }
 
   async function handleToggle(card: QrCard) {
@@ -917,9 +879,7 @@ function AdminPage() {
               <h1 className="font-display text-base font-bold leading-none text-foreground">
                 DRFT QR Redirect Manager
               </h1>
-              <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
-                {QR_BASE_URL}
-              </p>
+              <p className="text-[11px] text-muted-foreground font-mono mt-0.5">{QR_BASE_URL}</p>
             </div>
           </div>
 
@@ -984,9 +944,7 @@ function AdminPage() {
               <Globe className="size-4" />
             </div>
             <div className="flex-1 space-y-1">
-              <p className="font-semibold text-foreground">
-                Domain &amp; Physical QR Mapping
-              </p>
+              <p className="font-semibold text-foreground">Domain &amp; Physical QR Mapping</p>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 Your 20 physical QR codes are permanently printed with URLs{" "}
                 <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[11px] text-foreground font-semibold">
@@ -996,7 +954,8 @@ function AdminPage() {
                 <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[11px] text-foreground font-semibold">
                   /q/020
                 </code>
-                . When scanned, our server immediately resolves and issues an instant redirect to whatever Google Review URL (or any link) you set below.
+                . When scanned, our server immediately resolves and issues an instant redirect to
+                whatever Google Review URL (or any link) you set below.
               </p>
             </div>
           </div>
@@ -1005,9 +964,7 @@ function AdminPage() {
         {/* ── Toolbar ── */}
         <section className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
-            <h2 className="font-display text-xl font-bold text-foreground">
-              QR Cards (20)
-            </h2>
+            <h2 className="font-display text-xl font-bold text-foreground">QR Cards (20)</h2>
             <Badge variant="outline" className="text-xs font-normal">
               {filtered.length} showing
             </Badge>
@@ -1037,9 +994,7 @@ function AdminPage() {
             {/* Status Filter */}
             <Select
               value={filterStatus}
-              onValueChange={(v) =>
-                setFilterStatus(v as "all" | "active" | "inactive")
-              }
+              onValueChange={(v) => setFilterStatus(v as "all" | "active" | "inactive")}
             >
               <SelectTrigger id="status-filter" className="w-32 text-xs h-9">
                 <SelectValue />
@@ -1071,9 +1026,7 @@ function AdminPage() {
                     <span>Sync to DB</span>
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>
-                  Push all 20 cards into Supabase database
-                </TooltipContent>
+                <TooltipContent>Push all 20 cards into Supabase database</TooltipContent>
               </Tooltip>
             </TooltipProvider>
 

@@ -57,9 +57,9 @@ function Landing() {
             Re-route forever.
           </h1>
           <p className="mt-5 max-w-xl text-base text-muted-foreground sm:text-lg">
-            Each printed card carries a permanent link like <code className="text-foreground">/q/007</code>.
-            Change where it points, switch it off, or hand it to a new shop — straight from your
-            phone, on site, in seconds.
+            Each printed card carries a permanent link like{" "}
+            <code className="text-foreground">/q/007</code>. Change where it points, switch it off,
+            or hand it to a new shop — straight from your phone, on site, in seconds.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Button asChild size="lg">

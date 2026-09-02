@@ -7,10 +7,10 @@ dynamically routable links backed by Supabase.
 
 ## 1. Prerequisites
 
-| Tool | Min version |
-|------|-------------|
-| Node.js | 18 |
-| npm | 9 |
+| Tool               | Min version     |
+| ------------------ | --------------- |
+| Node.js            | 18              |
+| npm                | 9               |
 | A Supabase project | free tier works |
 
 ---
@@ -32,6 +32,7 @@ npm install
 2. Paste the entire contents of `db/schema.sql` and click **Run**.
 
 This creates:
+
 - `public.qr_cards` — the 20 fixed card rows (`001`–`020`), seeded as `inactive`
 - `public.qr_scans` — one row per scan
 - `public.user_roles` — maps users to `admin` / `user` roles
@@ -79,13 +80,13 @@ The app starts at **http://localhost:3000**.
 
 ## 6. Route map
 
-| URL | What it does |
-|-----|--------------|
-| `/` | Public landing page |
-| `/auth` | Admin sign-in / sign-up |
-| `/admin` | Admin dashboard (requires sign-in + admin role) |
-| `/api/public/q/:id` | QR scan redirect endpoint (server-side 302) |
-| `/unassigned` | Shown when a card has no active destination |
+| URL                 | What it does                                    |
+| ------------------- | ----------------------------------------------- |
+| `/`                 | Public landing page                             |
+| `/auth`             | Admin sign-in / sign-up                         |
+| `/admin`            | Admin dashboard (requires sign-in + admin role) |
+| `/api/public/q/:id` | QR scan redirect endpoint (server-side 302)     |
+| `/unassigned`       | Shown when a card has no active destination     |
 
 ---
 
@@ -93,10 +94,10 @@ The app starts at **http://localhost:3000**.
 
 Cards **001** and **002** are pre-mapped to your two Google Review links:
 
-| Card | Google Review URL |
-|------|-------------------|
-| 001 | `https://search.google.com/local/writereview?placeid=ChIJK7BfLrErCTkRvBd4rfs6X8g` |
-| 002 | `https://search.google.com/local/writereview?placeid=ChIJUStYgL7pDDkRW8zAWxQ3Rhc` |
+| Card | Google Review URL                                                                 |
+| ---- | --------------------------------------------------------------------------------- |
+| 001  | `https://search.google.com/local/writereview?placeid=ChIJK7BfLrErCTkRvBd4rfs6X8g` |
+| 002  | `https://search.google.com/local/writereview?placeid=ChIJUStYgL7pDDkRW8zAWxQ3Rhc` |
 
 The QR code images are in `src/assests/20QRs-DRFT/QR1.png` through `QR20.png`.
 QR1 encodes `<your-domain>/api/public/q/001`, QR2 encodes `.../002`, etc.
@@ -120,8 +121,8 @@ Vercel, or any Node host.
 
 ## 9. Troubleshooting
 
-| Symptom | Fix |
-|---------|-----|
-| Admin page shows "Failed to load cards" | Your account doesn't have the `admin` role — run the SQL in step 3b |
+| Symptom                                        | Fix                                                                          |
+| ---------------------------------------------- | ---------------------------------------------------------------------------- |
+| Admin page shows "Failed to load cards"        | Your account doesn't have the `admin` role — run the SQL in step 3b          |
 | `/api/public/q/001` redirects to `/unassigned` | Card 001 is still `inactive` or has no URL — click **Seed** in the dashboard |
-| Sign-in fails with "Invalid login credentials" | Sign up first, then grant admin role |
+| Sign-in fails with "Invalid login credentials" | Sign up first, then grant admin role                                         |

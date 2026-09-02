@@ -4,11 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { useEffect } from "react";
 
 import { supabase } from "@/lib/supabase";
-import {
-  isValidCardId,
-  deviceTypeFromUserAgent,
-  DEFAULT_GOOGLE_REVIEW_LINKS,
-} from "@/lib/qr-config";
+import { isValidCardId, deviceTypeFromUserAgent, getDefaultReviewLink } from "@/lib/qr-config";
 
 /**
  * Public QR scan endpoint — /q/:id
@@ -64,9 +60,10 @@ const resolveCard = createServerFn({ method: "GET" })
     }
 
     // 3. Fallback to default Google Review link if card 001 or 002
-    if (DEFAULT_GOOGLE_REVIEW_LINKS[id]) {
+    const defaultLink = getDefaultReviewLink(id);
+    if (defaultLink) {
       return {
-        destination: DEFAULT_GOOGLE_REVIEW_LINKS[id].url,
+        destination: defaultLink.url,
         error: null,
       };
     }
@@ -92,19 +89,12 @@ export const Route = createFileRoute("/q/$id")({
       search: { id: params.id },
     });
   },
-  head: ({ loaderData }) => {
-    const dest = loaderData?.destination;
-    return {
-      meta: dest
-        ? [
-            {
-              httpEquiv: "refresh",
-              content: `0;url=${dest}`,
-            },
-          ]
-        : [],
-    };
-  },
+  head: () => ({
+    meta: [
+      { title: "Redirecting to Google Reviews — DRFT" },
+      { name: "robots", content: "noindex" },
+    ],
+  }),
   component: RedirectPage,
 });
 
@@ -140,24 +130,15 @@ function RedirectPage() {
             stroke="currentColor"
             strokeWidth="4"
           />
-          <path
-            className="opacity-75"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8v8z"
-          />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
         </svg>
       </div>
       <p className="mt-4 font-display text-lg font-semibold text-foreground">
         Redirecting to Google Reviews…
       </p>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Card #{id}
-      </p>
+      <p className="mt-1 text-sm text-muted-foreground">Card #{id}</p>
       {destination && (
-        <a
-          href={destination}
-          className="mt-4 text-xs text-primary underline underline-offset-2"
-        >
+        <a href={destination} className="mt-4 text-xs text-primary underline underline-offset-2">
           Click here if you are not redirected automatically
         </a>
       )}

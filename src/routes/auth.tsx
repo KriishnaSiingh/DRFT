@@ -16,7 +16,10 @@ export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
       { title: "Admin sign in — QR Routing Manager" },
-      { name: "description", content: "Sign in to manage QR card destinations and scan analytics." },
+      {
+        name: "description",
+        content: "Sign in to manage QR card destinations and scan analytics.",
+      },
       { name: "robots", content: "noindex" },
       { property: "og:title", content: "Admin sign in — QR Routing Manager" },
       { property: "og:description", content: "Sign in to manage QR card destinations." },

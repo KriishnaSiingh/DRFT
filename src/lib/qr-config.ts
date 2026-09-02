@@ -22,17 +22,13 @@ export const CARD_IDS: readonly string[] = Array.from({ length: 20 }, (_, i) =>
 export const TOTAL_CARDS = CARD_IDS.length;
 
 export const QR_BASE_URL =
-  (import.meta.env["VITE_APP_URL"] as string | undefined) ??
-  "https://drftreviews.vercel.app";
+  (import.meta.env["VITE_APP_URL"] as string | undefined) ?? "https://drftreviews.vercel.app";
 
 export function getCardQrUrl(id: string): string {
   return `${QR_BASE_URL}/q/${id}`;
 }
 
-export const DEFAULT_GOOGLE_REVIEW_LINKS: Record<
-  string,
-  { shop_name: string; url: string }
-> = {
+export const DEFAULT_GOOGLE_REVIEW_LINKS = {
   "001": {
     shop_name: "DRFT Reviews — Location 1",
     url: "https://search.google.com/local/writereview?placeid=ChIJK7BfLrErCTkRvBd4rfs6X8g",
@@ -41,7 +37,15 @@ export const DEFAULT_GOOGLE_REVIEW_LINKS: Record<
     shop_name: "DRFT Reviews — Location 2",
     url: "https://search.google.com/local/writereview?placeid=ChIJUStYgL7pDDkRW8zAWxQ3Rhc",
   },
-};
+} as const;
+
+export function getDefaultReviewLink(
+  id: string,
+): { readonly shop_name: string; readonly url: string } | null {
+  if (id === "001") return DEFAULT_GOOGLE_REVIEW_LINKS["001"];
+  if (id === "002") return DEFAULT_GOOGLE_REVIEW_LINKS["002"];
+  return null;
+}
 
 export function isValidCardId(id: string): boolean {
   return /^0(0[1-9]|1[0-9]|20)$/.test(id);
