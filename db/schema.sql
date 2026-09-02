@@ -1,6 +1,6 @@
 -- ============================================================
--- Dynamic QR Routing Manager — full schema
--- Paste this into your Supabase project's SQL Editor and Run.
+-- DRFT QR Routing Manager — full schema
+-- Paste this into your Supabase project SQL Editor and Run.
 -- Safe to re-run (idempotent).
 -- ============================================================
 
@@ -56,6 +56,7 @@ create table if not exists public.qr_cards (
 
 grant select, insert, update on public.qr_cards to authenticated;
 grant all on public.qr_cards to service_role;
+-- anon needs NO direct table access — all public reads go through resolve_and_log_scan()
 
 alter table public.qr_cards enable row level security;
 
@@ -101,7 +102,7 @@ create policy "Admins can delete scans"
 on public.qr_scans for delete to authenticated
 using (public.has_role(auth.uid(), 'admin'));
 
--- ---------- scan + resolve (public; anon never touches tables directly) ----------
+-- ---------- resolve + log (callable by anon — no direct table access) ----------
 create or replace function public.resolve_and_log_scan(
   p_card_id text,
   p_device_type text default 'unknown',
@@ -119,6 +120,7 @@ begin
   select destination_url, status into v_url, v_status
   from public.qr_cards where id = p_card_id;
 
+  -- Return null if card doesn't exist, is inactive, or has no URL
   if v_url is null or v_status <> 'active' then
     return null;
   end if;
@@ -134,6 +136,7 @@ begin
 end;
 $$;
 
+-- anon CAN call this function (needed for QR scans without login)
 grant execute on function public.resolve_and_log_scan(text, text, text) to anon, authenticated;
 
 -- ---------- reset stats (admin only) ----------
@@ -171,15 +174,20 @@ create trigger qr_cards_touch_updated_at
 before update on public.qr_cards
 for each row execute function public.touch_updated_at();
 
--- ---------- seed the 20 fixed cards ----------
+-- ---------- seed all 20 fixed cards ----------
 insert into public.qr_cards (id, status)
 select to_char(n, 'FM000'), 'inactive' from generate_series(1, 20) as n
 on conflict (id) do nothing;
 
 -- ============================================================
--- AFTER you sign up in the app, grant yourself admin:
+-- STEP 2: After signing up in the app, grant yourself admin.
+-- Replace the email below with your actual email:
 --
 --   insert into public.user_roles (user_id, role)
 --   select id, 'admin' from auth.users where email = 'you@example.com'
 --   on conflict do nothing;
+--
+-- STEP 3: In the admin dashboard, click Edit on any card,
+-- paste your Google Review URL, and toggle the card Active.
+-- Cards 001-020 map to: https://drftreviews.vercel.app/q/001 ... /q/020
 -- ============================================================

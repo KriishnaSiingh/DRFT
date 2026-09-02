@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as UnassignedRouteImport } from './routes/unassigned'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
+import { Route as QIdRouteImport } from './routes/q.$id'
 import { Route as ApiPublicQIdRouteImport } from './routes/api/public/q.$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -40,6 +41,11 @@ const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const QIdRoute = QIdRouteImport.update({
+  id: '/q/$id',
+  path: '/q/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicQIdRoute = ApiPublicQIdRouteImport.update({
   id: '/api/public/q/$id',
   path: '/api/public/q/$id',
@@ -51,6 +57,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/unassigned': typeof UnassignedRoute
   '/admin': typeof AuthenticatedAdminRoute
+  '/q/$id': typeof QIdRoute
   '/api/public/q/$id': typeof ApiPublicQIdRoute
 }
 export interface FileRoutesByTo {
@@ -58,6 +65,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/unassigned': typeof UnassignedRoute
   '/admin': typeof AuthenticatedAdminRoute
+  '/q/$id': typeof QIdRoute
   '/api/public/q/$id': typeof ApiPublicQIdRoute
 }
 export interface FileRoutesById {
@@ -67,13 +75,15 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/unassigned': typeof UnassignedRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
+  '/q/$id': typeof QIdRoute
   '/api/public/q/$id': typeof ApiPublicQIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/unassigned' | '/admin' | '/api/public/q/$id'
+  fullPaths:
+    '/' | '/auth' | '/unassigned' | '/admin' | '/q/$id' | '/api/public/q/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/unassigned' | '/admin' | '/api/public/q/$id'
+  to: '/' | '/auth' | '/unassigned' | '/admin' | '/q/$id' | '/api/public/q/$id'
   id:
     | '__root__'
     | '/'
@@ -81,6 +91,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/unassigned'
     | '/_authenticated/admin'
+    | '/q/$id'
     | '/api/public/q/$id'
   fileRoutesById: FileRoutesById
 }
@@ -89,6 +100,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   UnassignedRoute: typeof UnassignedRoute
+  QIdRoute: typeof QIdRoute
   ApiPublicQIdRoute: typeof ApiPublicQIdRoute
 }
 
@@ -129,6 +141,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/q/$id': {
+      id: '/q/$id'
+      path: '/q/$id'
+      fullPath: '/q/$id'
+      preLoaderRoute: typeof QIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/q/$id': {
       id: '/api/public/q/$id'
       path: '/api/public/q/$id'
@@ -155,6 +174,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   UnassignedRoute: UnassignedRoute,
+  QIdRoute: QIdRoute,
   ApiPublicQIdRoute: ApiPublicQIdRoute,
 }
 export const routeTree = rootRouteImport
