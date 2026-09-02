@@ -68,7 +68,7 @@ function Landing() {
               </Link>
             </Button>
             <Button asChild size="lg" variant="outline">
-              <Link to="/q/$id" params={{ id: "001" }}>
+              <Link to="/api/public/q/$id" params={{ id: "001" }}>
                 Try card 001
               </Link>
             </Button>
