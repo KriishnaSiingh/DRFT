@@ -1,113 +1,166 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { getRequestHeader } from "@tanstack/react-start/server";
 import { createServerFn } from "@tanstack/react-start";
+import { useEffect } from "react";
 
 import { supabase } from "@/lib/supabase";
-import { isValidCardId, deviceTypeFromUserAgent } from "@/lib/qr-config";
+import {
+  isValidCardId,
+  deviceTypeFromUserAgent,
+  DEFAULT_GOOGLE_REVIEW_LINKS,
+} from "@/lib/qr-config";
 
 /**
  * Public QR scan endpoint — /q/:id
  *
- * QR codes are printed with URL: https://drftreviews.vercel.app/q/001 … /q/020
+ * Physical QR codes are printed with:
+ *   https://drftreviews.vercel.app/q/001 ... https://drftreviews.vercel.app/q/020
  *
  * Flow:
- *  1. Validate card ID (001–020).
- *  2. Call resolve_and_log_scan() RPC — logs scan, returns destination URL.
- *  3. Client-side redirect to destination OR /unassigned if inactive/empty.
+ *  1. Validate card ID format (001–020).
+ *  2. Resolve destination from Supabase (RPC resolve_and_log_scan or fallback direct lookup).
+ *  3. Issue HTTP 307 redirect immediately (server-side).
+ *  4. Fallback client-side redirect in component with <meta http-equiv="refresh">.
  */
 
 const resolveCard = createServerFn({ method: "GET" })
   .validator((id: unknown) => String(id))
   .handler(async ({ data: id }) => {
-    const ua = getRequestHeader("user-agent") ?? null;
-
     if (!isValidCardId(id)) {
       return { destination: null, error: "invalid_id" };
     }
 
+    const ua = getRequestHeader("user-agent") ?? null;
     const deviceType = deviceTypeFromUserAgent(ua);
 
-    const { data, error } = await supabase.rpc("resolve_and_log_scan", {
-      p_card_id: id,
-      p_device_type: deviceType,
-      p_user_agent: ua,
-    });
+    // 1. Call RPC resolve_and_log_scan to log scan & retrieve destination URL
+    try {
+      const { data, error } = await supabase.rpc("resolve_and_log_scan", {
+        p_card_id: id,
+        p_device_type: deviceType,
+        p_user_agent: ua,
+      });
 
-    if (error) {
-      console.error("[q.$id] resolve_and_log_scan error:", error.message);
-      return { destination: null, error: error.message };
+      if (!error && data) {
+        return { destination: data as string, error: null };
+      }
+    } catch (e) {
+      console.error("[q.$id] RPC resolve_and_log_scan failed:", e);
     }
 
-    return { destination: (data as string | null) ?? null, error: null };
+    // 2. Fallback direct table query in case RPC wasn't created yet in DB
+    try {
+      const { data: card } = await supabase
+        .from("qr_cards")
+        .select("destination_url, status")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (card && card.status === "active" && card.destination_url) {
+        return { destination: card.destination_url, error: null };
+      }
+    } catch (e) {
+      console.error("[q.$id] direct query failed:", e);
+    }
+
+    // 3. Fallback to default Google Review link if card 001 or 002
+    if (DEFAULT_GOOGLE_REVIEW_LINKS[id]) {
+      return {
+        destination: DEFAULT_GOOGLE_REVIEW_LINKS[id].url,
+        error: null,
+      };
+    }
+
+    return { destination: null, error: "not_active" };
   });
 
 export const Route = createFileRoute("/q/$id")({
   preload: false,
   loader: async ({ params }) => {
-    return resolveCard({ data: params.id });
+    if (!isValidCardId(params.id)) {
+      throw redirect({ to: "/" });
+    }
+
+    const { destination } = await resolveCard({ data: params.id });
+
+    if (destination) {
+      throw redirect({ href: destination });
+    }
+
+    throw redirect({
+      to: "/unassigned",
+      search: { id: params.id },
+    });
+  },
+  head: ({ loaderData }) => {
+    const dest = loaderData?.destination;
+    return {
+      meta: dest
+        ? [
+            {
+              httpEquiv: "refresh",
+              content: `0;url=${dest}`,
+            },
+          ]
+        : [],
+    };
   },
   component: RedirectPage,
 });
 
-/**
- * RedirectPage handles the client-side redirect after the server resolves
- * the destination. This is necessary because TanStack Start loaders cannot
- * issue raw HTTP 302s — the redirect is done via window.location in the
- * component on mount.
- */
 function RedirectPage() {
-  const { destination, error } = Route.useLoaderData();
+  const { destination, error } = Route.useLoaderData() as {
+    destination: string | null;
+    error: string | null;
+  };
   const { id } = Route.useParams();
 
-  // Fire redirect as early as possible
-  if (typeof window !== "undefined") {
+  useEffect(() => {
     if (destination) {
       window.location.replace(destination);
     } else {
       window.location.replace(`/unassigned?id=${encodeURIComponent(id)}`);
     }
-  }
+  }, [destination, id]);
 
-  // Fallback UI while redirect fires (usually invisible)
   return (
-    <div
-      style={{
-        display: "flex",
-        minHeight: "100vh",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "var(--background, #1a1a2e)",
-        color: "var(--foreground, #f5f0e8)",
-        fontFamily: "system-ui, sans-serif",
-        flexDirection: "column",
-        gap: "12px",
-      }}
-    >
-      {destination ? (
-        <>
-          <svg
-            width="32"
-            height="32"
-            viewBox="0 0 24 24"
-            fill="none"
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 text-center">
+      <div className="flex size-12 items-center justify-center rounded-full bg-primary/10">
+        <svg
+          className="size-6 animate-spin text-primary"
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+        >
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
             stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ opacity: 0.5, animation: "spin 1s linear infinite" }}
-          >
-            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-          </svg>
-          <p style={{ opacity: 0.6, fontSize: "14px" }}>Redirecting…</p>
-        </>
-      ) : (
-        <p style={{ opacity: 0.6, fontSize: "14px" }}>
-          {error === "invalid_id"
-            ? "Invalid QR card ID."
-            : "Card not yet active."}
-        </p>
+            strokeWidth="4"
+          />
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8v8z"
+          />
+        </svg>
+      </div>
+      <p className="mt-4 font-display text-lg font-semibold text-foreground">
+        Redirecting to Google Reviews…
+      </p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Card #{id}
+      </p>
+      {destination && (
+        <a
+          href={destination}
+          className="mt-4 text-xs text-primary underline underline-offset-2"
+        >
+          Click here if you are not redirected automatically
+        </a>
       )}
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

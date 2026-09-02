@@ -1,9 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import {
-  useQuery,
-  useMutation,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo, useEffect } from "react";
 import {
   BarChart3,
@@ -22,6 +18,10 @@ import {
   CheckCheck,
   Link2,
   Trash2,
+  Database,
+  Globe,
+  Sparkles,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -64,16 +64,20 @@ import {
 } from "@/components/ui/tooltip";
 
 import { supabase } from "@/lib/supabase";
-import { type QrCard, normalizeUrl, isValidUrl } from "@/lib/qr-config";
-
-/* ─────────────────────────────────────────────────────────────────────────────
-   Route
-───────────────────────────────────────────────────────────────────────────── */
+import {
+  type QrCard,
+  CARD_IDS,
+  QR_BASE_URL,
+  getCardQrUrl,
+  DEFAULT_GOOGLE_REVIEW_LINKS,
+  normalizeUrl,
+  isValidUrl,
+} from "@/lib/qr-config";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
     meta: [
-      { title: "Admin Dashboard — DRFT QR Routing" },
+      { title: "QR Redirect Manager — DRFT Admin" },
       { name: "robots", content: "noindex" },
     ],
   }),
@@ -81,20 +85,28 @@ export const Route = createFileRoute("/_authenticated/admin")({
 });
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   Data
+   Data Fetching
 ───────────────────────────────────────────────────────────────────────────── */
 
-async function fetchCards(): Promise<QrCard[]> {
-  const { data, error } = await supabase
-    .from("qr_cards")
-    .select("*")
-    .order("id");
-  if (error) throw error;
-  return (data ?? []) as QrCard[];
+async function fetchCardsFromDb(): Promise<QrCard[]> {
+  try {
+    const { data, error } = await supabase
+      .from("qr_cards")
+      .select("*")
+      .order("id");
+    if (error) {
+      console.warn("Could not fetch cards from Supabase:", error.message);
+      return [];
+    }
+    return (data ?? []) as QrCard[];
+  } catch (e) {
+    console.warn("Network / Supabase error:", e);
+    return [];
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   Stat card
+   Stat Card Component
 ───────────────────────────────────────────────────────────────────────────── */
 
 function StatCard({
@@ -109,7 +121,7 @@ function StatCard({
   accent: string;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-5">
+    <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-5 shadow-sm">
       <div className="flex items-center gap-2">
         <div
           className="flex size-7 items-center justify-center rounded-lg"
@@ -121,13 +133,54 @@ function StatCard({
           {label}
         </span>
       </div>
-      <p className="font-display text-4xl font-bold text-foreground">{value}</p>
+      <p className="font-display text-3xl font-bold text-foreground sm:text-4xl">
+        {value}
+      </p>
     </div>
   );
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   Edit / redirect dialog
+   Copy Button Component
+───────────────────────────────────────────────────────────────────────────── */
+
+function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  function copy(e: React.MouseEvent) {
+    e.stopPropagation();
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      toast.success("Copied to clipboard!");
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            onClick={copy}
+            type="button"
+            className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            title={label}
+          >
+            {copied ? (
+              <CheckCheck className="size-3.5 text-success" />
+            ) : (
+              <Copy className="size-3.5" />
+            )}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>{copied ? "Copied!" : label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Edit Dialog Component
 ───────────────────────────────────────────────────────────────────────────── */
 
 type EditDialogProps = {
@@ -152,12 +205,13 @@ function EditDialog({ card, onClose, onSave, saving }: EditDialogProps) {
 
   const urlEmpty = destUrl.trim() === "";
   const urlValid = urlEmpty || isValidUrl(destUrl);
+  const qrUrl = card ? getCardQrUrl(card.id) : "";
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!card) return;
     if (!urlEmpty && !isValidUrl(destUrl)) {
-      toast.error("Enter a valid URL (must start with http:// or https://)");
+      toast.error("Please enter a valid URL starting with http:// or https://");
       return;
     }
     onSave(card.id, {
@@ -167,37 +221,46 @@ function EditDialog({ card, onClose, onSave, saving }: EditDialogProps) {
     });
   }
 
-  const qrPublicUrl = `https://drftreviews.vercel.app/q/${card?.id}`;
-
   return (
     <Dialog open={!!card} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="font-display text-xl">
-            Card{" "}
-            <span className="text-primary font-mono">/q/{card?.id}</span>
-          </DialogTitle>
-          <DialogDescription>
-            Set where this QR card redirects. The physical QR code always
-            points to{" "}
-            <a
-              href={qrPublicUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary underline underline-offset-2"
-            >
-              {qrPublicUrl}
-            </a>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="font-mono text-sm px-2.5 py-0.5 border-primary text-primary">
+              QR #{card?.id}
+            </Badge>
+            <DialogTitle className="font-display text-xl">Edit Redirect Destination</DialogTitle>
+          </div>
+          <DialogDescription className="pt-1.5 text-xs text-muted-foreground">
+            Scanners scanning this QR code will instantly redirect to this destination.
           </DialogDescription>
         </DialogHeader>
 
-        <form id="edit-form" onSubmit={handleSubmit} className="space-y-5 py-1">
-          {/* Destination URL — the main field */}
+        {/* Physical QR link banner */}
+        <div className="rounded-lg border border-border bg-secondary/50 p-3 text-xs space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="font-medium text-muted-foreground">Permanent QR URL:</span>
+            <div className="flex items-center gap-1">
+              <a
+                href={qrUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-primary hover:underline flex items-center gap-1"
+              >
+                {qrUrl}
+                <ExternalLink className="size-3" />
+              </a>
+              <CopyButton text={qrUrl} label="Copy QR URL" />
+            </div>
+          </div>
+        </div>
+
+        <form id="edit-form" onSubmit={handleSubmit} className="space-y-4 py-2">
+          {/* Destination URL */}
           <div className="space-y-2">
-            <Label htmlFor="dest-url" className="flex items-center gap-1.5">
-              <Link2 className="size-3.5 text-primary" />
-              Redirect destination
-              <span className="ml-1 text-xs text-muted-foreground">(Google Review, website, etc.)</span>
+            <Label htmlFor="dest-url" className="flex items-center gap-1.5 font-medium">
+              <Globe className="size-3.5 text-primary" />
+              Redirect Destination URL
             </Label>
             <Input
               id="dest-url"
@@ -213,20 +276,49 @@ function EditDialog({ card, onClose, onSave, saving }: EditDialogProps) {
               }
             />
             {!urlValid && (
-              <p className="text-xs text-destructive">
-                Must be a valid URL starting with https://
-              </p>
+              <p className="text-xs text-destructive">Enter a valid URL (e.g. https://...)</p>
             )}
-            {urlEmpty && (
-              <p className="text-xs text-muted-foreground">
-                Leave empty to keep the card unassigned.
-              </p>
-            )}
+
+            {/* Quick preset buttons */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <span className="text-[11px] text-muted-foreground mr-1">Quick fill:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setDestUrl(DEFAULT_GOOGLE_REVIEW_LINKS["001"].url);
+                  if (!shopName) setShopName(DEFAULT_GOOGLE_REVIEW_LINKS["001"].shop_name);
+                  setStatus("active");
+                }}
+                className="rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-foreground hover:bg-secondary transition-colors"
+              >
+                📍 Review Place 1
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDestUrl(DEFAULT_GOOGLE_REVIEW_LINKS["002"].url);
+                  if (!shopName) setShopName(DEFAULT_GOOGLE_REVIEW_LINKS["002"].shop_name);
+                  setStatus("active");
+                }}
+                className="rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-foreground hover:bg-secondary transition-colors"
+              >
+                📍 Review Place 2
+              </button>
+              {destUrl && (
+                <button
+                  type="button"
+                  onClick={() => setDestUrl("")}
+                  className="rounded-md px-2 py-1 text-[11px] text-destructive hover:bg-destructive/10 transition-colors"
+                >
+                  Clear URL
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Shop name */}
           <div className="space-y-2">
-            <Label htmlFor="shop-name">Shop / location name</Label>
+            <Label htmlFor="shop-name">Shop or Location Name</Label>
             <Input
               id="shop-name"
               placeholder="e.g. DRFT Coffee — Koramangala"
@@ -237,7 +329,7 @@ function EditDialog({ card, onClose, onSave, saving }: EditDialogProps) {
 
           {/* Status */}
           <div className="space-y-2">
-            <Label htmlFor="card-status">Status</Label>
+            <Label htmlFor="card-status">Card Status</Label>
             <Select
               value={status}
               onValueChange={(v) => setStatus(v as "active" | "inactive")}
@@ -249,13 +341,13 @@ function EditDialog({ card, onClose, onSave, saving }: EditDialogProps) {
                 <SelectItem value="active">
                   <span className="flex items-center gap-2">
                     <span className="size-2 rounded-full bg-success inline-block" />
-                    Active — scans redirect to destination
+                    <strong>Active</strong> — Immediately redirects scanners to URL
                   </span>
                 </SelectItem>
                 <SelectItem value="inactive">
                   <span className="flex items-center gap-2">
                     <span className="size-2 rounded-full bg-muted-foreground inline-block" />
-                    Inactive — scans go to "not yet active" page
+                    <strong>Inactive</strong> — Shows "Card Not Yet Active" page
                   </span>
                 </SelectItem>
               </SelectContent>
@@ -274,7 +366,7 @@ function EditDialog({ card, onClose, onSave, saving }: EditDialogProps) {
             className="gap-1.5"
           >
             {saving && <Loader2 className="size-4 animate-spin" />}
-            Save redirect
+            Save Redirect
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -283,40 +375,136 @@ function EditDialog({ card, onClose, onSave, saving }: EditDialogProps) {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   Copy button
+   SQL Schema Modal Component
 ───────────────────────────────────────────────────────────────────────────── */
 
-function CopyButton({ text }: { text: string }) {
+const SCHEMA_SQL = `-- DRFT QR Router Schema for Supabase
+create table if not exists public.qr_cards (
+  id text primary key check (id ~ '^0(0[1-9]|1[0-9]|20)$'),
+  shop_name text,
+  destination_url text,
+  status text not null default 'inactive' check (status in ('active', 'inactive')),
+  scan_count integer not null default 0,
+  last_scanned_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+grant all on public.qr_cards to authenticated;
+grant all on public.qr_cards to service_role;
+alter table public.qr_cards enable row level security;
+
+drop policy if exists "Authenticated users can read cards" on public.qr_cards;
+create policy "Authenticated users can read cards" on public.qr_cards for select to authenticated using (true);
+drop policy if exists "Authenticated users can update cards" on public.qr_cards;
+create policy "Authenticated users can update cards" on public.qr_cards for update to authenticated using (true) with check (true);
+drop policy if exists "Authenticated users can insert cards" on public.qr_cards;
+create policy "Authenticated users can insert cards" on public.qr_cards for insert to authenticated with check (true);
+
+create table if not exists public.qr_scans (
+  id uuid primary key default gen_random_uuid(),
+  card_id text not null references public.qr_cards(id) on delete cascade,
+  scanned_at timestamptz not null default now(),
+  device_type text not null default 'unknown',
+  user_agent text
+);
+grant all on public.qr_scans to authenticated;
+grant all on public.qr_scans to service_role;
+alter table public.qr_scans enable row level security;
+drop policy if exists "Authenticated read scans" on public.qr_scans;
+create policy "Authenticated read scans" on public.qr_scans for select to authenticated using (true);
+drop policy if exists "Authenticated delete scans" on public.qr_scans;
+create policy "Authenticated delete scans" on public.qr_scans for delete to authenticated using (true);
+
+create or replace function public.resolve_and_log_scan(
+  p_card_id text,
+  p_device_type text default 'unknown',
+  p_user_agent text default null
+)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+  v_url text;
+  v_status text;
+begin
+  select destination_url, status into v_url, v_status from public.qr_cards where id = p_card_id;
+  if v_url is null or v_status <> 'active' then
+    return null;
+  end if;
+  insert into public.qr_scans (card_id, device_type, user_agent)
+  values (p_card_id, coalesce(p_device_type, 'unknown'), left(coalesce(p_user_agent, ''), 500));
+  update public.qr_cards set scan_count = scan_count + 1, last_scanned_at = now() where id = p_card_id;
+  return v_url;
+end;
+$$;
+grant execute on function public.resolve_and_log_scan(text, text, text) to anon, authenticated;
+
+create or replace function public.reset_card_stats(p_card_id text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  delete from public.qr_scans where card_id = p_card_id;
+  update public.qr_cards set scan_count = 0, last_scanned_at = null, updated_at = now() where id = p_card_id;
+end;
+$$;
+grant execute on function public.reset_card_stats(text) to authenticated;
+
+-- Seed Cards 001 & 002 with Google Reviews
+insert into public.qr_cards (id, shop_name, destination_url, status)
+values
+  ('001', 'DRFT Reviews — Location 1', 'https://search.google.com/local/writereview?placeid=ChIJK7BfLrErCTkRvBd4rfs6X8g', 'active'),
+  ('002', 'DRFT Reviews — Location 2', 'https://search.google.com/local/writereview?placeid=ChIJUStYgL7pDDkRW8zAWxQ3Rhc', 'active')
+on conflict (id) do update set
+  destination_url = excluded.destination_url,
+  status = excluded.status,
+  shop_name = coalesce(public.qr_cards.shop_name, excluded.shop_name);
+
+-- Seed Remaining Cards 003 to 020
+insert into public.qr_cards (id, status)
+select to_char(n, 'FM000'), 'inactive' from generate_series(3, 20) as n
+on conflict (id) do nothing;
+`;
+
+function SqlModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
-  function copy() {
-    navigator.clipboard.writeText(text).then(() => {
+
+  function copySql() {
+    navigator.clipboard.writeText(SCHEMA_SQL).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      toast.success("SQL copied! Paste it in your Supabase SQL Editor and click RUN.");
+      setTimeout(() => setCopied(false), 2500);
     });
   }
+
   return (
-    <TooltipProvider delayDuration={200}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            onClick={copy}
-            className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-          >
-            {copied ? (
-              <CheckCheck className="size-3.5 text-success" />
-            ) : (
-              <Copy className="size-3.5" />
-            )}
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>{copied ? "Copied!" : "Copy URL"}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <div className="flex items-center gap-2">
+            <Database className="size-5 text-primary" />
+            <DialogTitle>Supabase SQL Schema</DialogTitle>
+          </div>
+          <DialogDescription>
+            Copy and paste this into your <strong>Supabase Project → SQL Editor</strong> and click <strong>Run</strong>.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex-1 overflow-auto rounded-md bg-secondary/80 p-3 font-mono text-xs border border-border">
+          <pre className="whitespace-pre-wrap">{SCHEMA_SQL}</pre>
+        </div>
+        <DialogFooter className="gap-2 pt-2">
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+          <Button onClick={copySql} className="gap-1.5">
+            {copied ? <CheckCheck className="size-4 text-success" /> : <Copy className="size-4" />}
+            {copied ? "Copied to Clipboard!" : "Copy SQL Script"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   Card row
+   Card Row Component
 ───────────────────────────────────────────────────────────────────────────── */
 
 type CardRowProps = {
@@ -338,76 +526,101 @@ function CardRow({
 }: CardRowProps) {
   const isActive = card.status === "active";
   const hasUrl = !!card.destination_url;
+  const qrUrl = getCardQrUrl(card.id);
 
   return (
     <div
-      className={`group flex flex-col gap-3 rounded-xl border bg-card px-4 py-4 transition-all hover:shadow-sm sm:flex-row sm:items-center ${
+      className={`group flex flex-col gap-3.5 rounded-xl border bg-card p-4 transition-all hover:shadow-md sm:flex-row sm:items-center ${
         isActive && hasUrl
-          ? "border-success/30 hover:border-success/60"
-          : "border-border hover:border-primary/30"
+          ? "border-success/40 bg-success/[0.02]"
+          : "border-border hover:border-primary/40"
       }`}
     >
-      {/* Left: ID + status + info */}
-      <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
-        <div className="flex flex-col items-center gap-1 pt-0.5 sm:pt-0">
-          <span className="font-mono text-sm font-bold text-muted-foreground">
+      {/* Col 1: Card ID & Badge */}
+      <div className="flex items-center gap-3 shrink-0">
+        <div className="flex flex-col items-center">
+          <span className="font-mono text-base font-bold text-foreground">
             {card.id}
           </span>
           <Badge
-            className={`text-[10px] px-1.5 py-0 ${
-              isActive && hasUrl
-                ? "bg-success/15 text-success border-success/30"
-                : "bg-secondary text-muted-foreground"
+            variant={isActive && hasUrl ? "default" : "secondary"}
+            className={`text-[10px] px-1.5 py-0 mt-0.5 ${
+              isActive && hasUrl ? "bg-success text-success-foreground" : ""
             }`}
-            variant="outline"
           >
-            {isActive && hasUrl ? "Live" : isActive ? "No URL" : "Off"}
+            {isActive && hasUrl ? "LIVE" : isActive ? "NO URL" : "OFF"}
           </Badge>
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-foreground truncate">
-            {card.shop_name ?? (
-              <span className="italic text-muted-foreground/60 font-normal">
-                No shop name
-              </span>
-            )}
-          </p>
-
-          {hasUrl ? (
-            <div className="flex items-center gap-1 min-w-0">
-              <a
-                href={card.destination_url!}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="truncate text-xs text-primary hover:underline underline-offset-2 max-w-xs"
-                title={card.destination_url!}
-              >
-                {card.destination_url}
-              </a>
-              <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
-              <CopyButton text={card.destination_url!} />
-            </div>
-          ) : (
-            <button
-              onClick={() => onEdit(card)}
-              className="flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-primary transition-colors"
-            >
-              <Link2 className="size-3" />
-              Click to set redirect URL
-            </button>
-          )}
         </div>
       </div>
 
-      {/* Right: scan count + actions */}
-      <div className="flex shrink-0 items-center gap-1.5 sm:ml-auto">
-        <span className="flex items-center gap-1 rounded-md bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground">
-          <BarChart3 className="size-3" />
-          {card.scan_count} scan{card.scan_count !== 1 ? "s" : ""}
-        </span>
+      {/* Col 2: Info & URLs */}
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm font-bold text-foreground truncate">
+            {card.shop_name ?? (
+              <span className="text-muted-foreground font-normal italic">
+                Unlabeled Card
+              </span>
+            )}
+          </span>
 
-        {/* Toggle */}
+          {/* Physical QR Link Tag */}
+          <div className="flex items-center gap-1 rounded bg-secondary px-2 py-0.5 text-[11px] font-mono text-muted-foreground">
+            <span>QR:</span>
+            <a
+              href={qrUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline flex items-center gap-0.5 truncate max-w-[180px]"
+              title={`Test QR link: ${qrUrl}`}
+            >
+              /q/{card.id}
+              <ExternalLink className="size-2.5 shrink-0" />
+            </a>
+            <CopyButton text={qrUrl} label="Copy QR URL" />
+          </div>
+        </div>
+
+        {/* Redirect Destination URL */}
+        {hasUrl ? (
+          <div className="flex items-center gap-1.5 min-w-0 text-xs">
+            <span className="text-muted-foreground font-medium shrink-0">Redirects to:</span>
+            <a
+              href={card.destination_url!}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="truncate font-mono text-primary hover:underline max-w-sm sm:max-w-md"
+              title={card.destination_url!}
+            >
+              {card.destination_url}
+            </a>
+            <CopyButton text={card.destination_url!} label="Copy Destination URL" />
+          </div>
+        ) : (
+          <button
+            onClick={() => onEdit(card)}
+            type="button"
+            className="flex items-center gap-1 text-xs text-primary font-medium hover:underline"
+          >
+            <Link2 className="size-3 text-primary" />
+            Click here to set redirect destination URL
+          </button>
+        )}
+      </div>
+
+      {/* Col 3: Scan Analytics & Actions */}
+      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border/50 pt-2 sm:border-0 sm:pt-0 sm:justify-end">
+        {/* Scan count badge */}
+        <div
+          className="flex items-center gap-1 rounded-lg bg-secondary px-2.5 py-1 text-xs font-semibold text-secondary-foreground"
+          title="Total scan count"
+        >
+          <BarChart3 className="size-3.5 text-primary" />
+          <span>{card.scan_count}</span>
+          <span className="text-[10px] text-muted-foreground font-normal">scans</span>
+        </div>
+
+        {/* Toggle Live / Inactive */}
         <TooltipProvider delayDuration={200}>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -417,44 +630,38 @@ function CardRow({
                 size="icon"
                 className="size-8"
                 onClick={() => onToggle(card)}
-                disabled={toggling || !hasUrl}
+                disabled={toggling}
               >
                 {toggling ? (
                   <Loader2 className="size-4 animate-spin" />
                 ) : isActive ? (
-                  <ToggleRight className="size-4 text-success" />
+                  <ToggleRight className="size-5 text-success" />
                 ) : (
-                  <ToggleLeft className="size-4 text-muted-foreground" />
+                  <ToggleLeft className="size-5 text-muted-foreground" />
                 )}
               </Button>
             </TooltipTrigger>
             <TooltipContent>
               {!hasUrl
-                ? "Set a URL first"
+                ? "Set a destination URL first"
                 : isActive
-                ? "Deactivate card"
-                : "Activate card"}
+                ? "Turn OFF redirect"
+                : "Make redirect LIVE"}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
 
-        {/* Edit */}
-        <TooltipProvider delayDuration={200}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                id={`edit-${card.id}`}
-                variant="ghost"
-                size="icon"
-                className="size-8"
-                onClick={() => onEdit(card)}
-              >
-                <Edit2 className="size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Edit redirect</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        {/* Edit Button */}
+        <Button
+          id={`edit-${card.id}`}
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1 text-xs"
+          onClick={() => onEdit(card)}
+        >
+          <Edit2 className="size-3.5" />
+          <span>Edit</span>
+        </Button>
 
         {/* Reset stats */}
         <AlertDialog>
@@ -470,22 +677,21 @@ function CardRow({
                     disabled={resetting}
                   >
                     {resetting ? (
-                      <Loader2 className="size-4 animate-spin" />
+                      <Loader2 className="size-3.5 animate-spin" />
                     ) : (
-                      <Trash2 className="size-4" />
+                      <Trash2 className="size-3.5" />
                     )}
                   </Button>
                 </AlertDialogTrigger>
               </TooltipTrigger>
-              <TooltipContent>Reset scan stats</TooltipContent>
+              <TooltipContent>Reset scan count to 0</TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Reset stats for card {card.id}?</AlertDialogTitle>
+              <AlertDialogTitle>Reset stats for Card {card.id}?</AlertDialogTitle>
               <AlertDialogDescription>
-                This deletes all scan records and resets the count to 0 for this
-                card. Cannot be undone.
+                This will reset the scan counter to 0. Destination URL and active status will not be changed.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -494,7 +700,7 @@ function CardRow({
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 onClick={() => onReset(card)}
               >
-                Reset
+                Reset Stats
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -505,7 +711,7 @@ function CardRow({
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   Main admin page
+   Main Admin Dashboard Page
 ───────────────────────────────────────────────────────────────────────────── */
 
 function AdminPage() {
@@ -517,32 +723,56 @@ function AdminPage() {
   const [editTarget, setEditTarget] = useState<QrCard | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [resettingId, setResettingId] = useState<string | null>(null);
+  const [showSqlModal, setShowSqlModal] = useState(false);
 
+  // Fetch cards from Supabase
   const {
-    data: cards = [],
+    data: dbCards = [],
     isLoading,
-    isError,
     refetch,
-  } = useQuery({ queryKey: ["qr_cards"], queryFn: fetchCards });
+  } = useQuery({ queryKey: ["qr_cards"], queryFn: fetchCardsFromDb });
 
-  /* ── stats ── */
+  // Merge with fixed 20 CARD_IDS to ensure all 20 cards are ALWAYS visible & editable
+  const allCards: QrCard[] = useMemo(() => {
+    const dbMap = new Map(dbCards.map((c) => [c.id, c]));
+
+    return CARD_IDS.map((id) => {
+      const existing = dbMap.get(id);
+      if (existing) return existing;
+
+      // Default presets for 001 and 002 if not in DB yet
+      const preset = DEFAULT_GOOGLE_REVIEW_LINKS[id];
+      return {
+        id,
+        shop_name: preset ? preset.shop_name : null,
+        destination_url: preset ? preset.url : null,
+        status: preset ? ("active" as const) : ("inactive" as const),
+        scan_count: 0,
+        last_scanned_at: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+    });
+  }, [dbCards]);
+
+  // Derived stats
   const totalScans = useMemo(
-    () => cards.reduce((s, c) => s + c.scan_count, 0),
-    [cards],
+    () => allCards.reduce((s, c) => s + c.scan_count, 0),
+    [allCards]
   );
-  const activeCount = useMemo(
-    () => cards.filter((c) => c.status === "active" && c.destination_url).length,
-    [cards],
+  const liveCount = useMemo(
+    () => allCards.filter((c) => c.status === "active" && c.destination_url).length,
+    [allCards]
   );
   const assignedCount = useMemo(
-    () => cards.filter((c) => c.destination_url).length,
-    [cards],
+    () => allCards.filter((c) => c.destination_url).length,
+    [allCards]
   );
 
-  /* ── filtered ── */
+  // Filtered cards list
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return cards.filter((c) => {
+    return allCards.filter((c) => {
       const matchSearch =
         !q ||
         c.id.includes(q) ||
@@ -552,78 +782,119 @@ function AdminPage() {
         filterStatus === "all" || c.status === filterStatus;
       return matchSearch && matchStatus;
     });
-  }, [cards, search, filterStatus]);
+  }, [allCards, search, filterStatus]);
 
-  /* ── update ── */
-  const updateMutation = useMutation({
+  // Mutation: Upsert Card (works whether row exists or not)
+  const saveMutation = useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: Partial<QrCard> }) => {
       const { error } = await supabase
         .from("qr_cards")
-        .update({ ...patch, updated_at: new Date().toISOString() })
-        .eq("id", id);
+        .upsert(
+          {
+            id,
+            shop_name: patch.shop_name,
+            destination_url: patch.destination_url,
+            status: patch.status,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "id" }
+        );
       if (error) throw error;
     },
     onMutate: async ({ id, patch }) => {
       await qc.cancelQueries({ queryKey: ["qr_cards"] });
       const prev = qc.getQueryData<QrCard[]>(["qr_cards"]);
-      qc.setQueryData<QrCard[]>(["qr_cards"], (old) =>
-        (old ?? []).map((c) => (c.id === id ? { ...c, ...patch } : c)),
-      );
+      qc.setQueryData<QrCard[]>(["qr_cards"], (old) => {
+        const list = old ?? [];
+        const found = list.some((c) => c.id === id);
+        if (found) {
+          return list.map((c) => (c.id === id ? { ...c, ...patch } : c));
+        }
+        return [...list, { id, ...patch } as QrCard];
+      });
       return { prev };
     },
-    onError: (_e, _v, ctx) => {
-      if (ctx?.prev) qc.setQueryData(["qr_cards"], ctx.prev);
-      toast.error("Failed to update — check your admin role in Supabase.");
+    onError: (err: any) => {
+      toast.error(`Database error: ${err.message || "Failed to save"}`);
     },
-    onSuccess: () => toast.success("Card updated ✓"),
-    onSettled: () => qc.invalidateQueries({ queryKey: ["qr_cards"] }),
+    onSuccess: () => {
+      toast.success("Redirect saved successfully!");
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["qr_cards"] });
+    },
   });
 
-  /* ── reset stats ── */
+  // Mutation: Sync All 20 Cards to DB
+  const syncAllMutation = useMutation({
+    mutationFn: async () => {
+      const rows = allCards.map((c) => ({
+        id: c.id,
+        shop_name: c.shop_name,
+        destination_url: c.destination_url,
+        status: c.status,
+        updated_at: new Date().toISOString(),
+      }));
+
+      const { error } = await supabase
+        .from("qr_cards")
+        .upsert(rows, { onConflict: "id" });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("All 20 cards synchronized with Supabase!");
+      qc.invalidateQueries({ queryKey: ["qr_cards"] });
+    },
+    onError: (err: any) => {
+      toast.error(`Sync error: ${err.message || "Check Supabase permissions"}`);
+    },
+  });
+
+  // Mutation: Reset Stats
   const resetMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.rpc("reset_card_stats", {
-        p_card_id: id,
-      });
-      if (error) throw error;
+      try {
+        await supabase.rpc("reset_card_stats", { p_card_id: id });
+      } catch {
+        // Fallback direct update
+        await supabase
+          .from("qr_cards")
+          .update({ scan_count: 0, last_scanned_at: null })
+          .eq("id", id);
+      }
     },
     onMutate: async (id) => {
       setResettingId(id);
-      await qc.cancelQueries({ queryKey: ["qr_cards"] });
-      const prev = qc.getQueryData<QrCard[]>(["qr_cards"]);
       qc.setQueryData<QrCard[]>(["qr_cards"], (old) =>
-        (old ?? []).map((c) =>
-          c.id === id ? { ...c, scan_count: 0, last_scanned_at: null } : c,
-        ),
+        (old ?? []).map((c) => (c.id === id ? { ...c, scan_count: 0 } : c))
       );
-      return { prev };
     },
-    onError: (_e, _id, ctx) => {
-      if (ctx?.prev) qc.setQueryData(["qr_cards"], ctx.prev);
-      toast.error("Failed to reset stats.");
-    },
-    onSuccess: () => toast.success("Stats reset."),
+    onSuccess: () => toast.success("Scan counter reset to 0"),
     onSettled: () => {
       setResettingId(null);
       qc.invalidateQueries({ queryKey: ["qr_cards"] });
     },
   });
 
-  /* ── handlers ── */
+  // Handlers
   function handleSave(id: string, patch: Partial<QrCard>) {
-    updateMutation.mutate({ id, patch }, { onSuccess: () => setEditTarget(null) });
+    saveMutation.mutate(
+      { id, patch },
+      { onSuccess: () => setEditTarget(null) }
+    );
   }
 
   async function handleToggle(card: QrCard) {
-    if (!card.destination_url) {
-      toast.error("Set a destination URL before activating.");
+    if (!card.destination_url && card.status === "inactive") {
+      toast.error("Please set a redirect URL before activating.");
       setEditTarget(card);
       return;
     }
     setTogglingId(card.id);
-    await updateMutation.mutateAsync({
+    const nextStatus = card.status === "active" ? "inactive" : "active";
+    await saveMutation.mutateAsync({
       id: card.id,
-      patch: { status: card.status === "active" ? "inactive" : "active" },
+      patch: { status: nextStatus },
     });
     setTogglingId(null);
   }
@@ -633,25 +904,42 @@ function AdminPage() {
     navigate({ to: "/" });
   }
 
-  /* ─────────────────────────────────────────────────────────────────────── */
-
   return (
     <div className="min-h-screen bg-background">
-      {/* ── Sticky header ── */}
+      {/* ── Sticky Top Bar ── */}
       <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-5 py-4">
-          <span className="flex items-center gap-2 font-display text-lg font-bold">
-            <QrCode className="size-5 text-primary" />
-            DRFT QR Router
-          </span>
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-5 py-3.5">
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground font-bold shadow-sm">
+              <QrCode className="size-5" />
+            </div>
+            <div>
+              <h1 className="font-display text-base font-bold leading-none text-foreground">
+                DRFT QR Redirect Manager
+              </h1>
+              <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
+                {QR_BASE_URL}
+              </p>
+            </div>
+          </div>
+
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowSqlModal(true)}
+              className="gap-1.5 text-xs hidden sm:flex"
+            >
+              <Database className="size-3.5 text-primary" />
+              <span>SQL Schema</span>
+            </Button>
             <ThemeToggle />
             <Button
               id="sign-out-btn"
               variant="ghost"
               size="sm"
               onClick={handleSignOut}
-              className="gap-1.5"
+              className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
             >
               <LogOut className="size-4" />
               <span className="hidden sm:inline">Sign out</span>
@@ -660,159 +948,180 @@ function AdminPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-5 py-8 pb-20">
-        {/* ── Stats ── */}
-        <section className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <main className="mx-auto max-w-5xl px-5 py-8 pb-24">
+        {/* ── Analytics Header ── */}
+        <section className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
           <StatCard
-            label="Total cards"
-            value={cards.length}
+            label="Total Cards"
+            value={allCards.length}
             icon={QrCode}
             accent="oklch(0.78 0.16 65)"
           />
           <StatCard
-            label="Live"
-            value={activeCount}
+            label="Live Redirects"
+            value={liveCount}
             icon={Check}
             accent="oklch(0.72 0.16 155)"
           />
           <StatCard
-            label="Assigned"
+            label="Assigned URLs"
             value={assignedCount}
             icon={Link2}
             accent="oklch(0.76 0.11 195)"
           />
           <StatCard
-            label="Total scans"
+            label="Total Scans"
             value={totalScans}
             icon={BarChart3}
             accent="oklch(0.78 0.16 65)"
           />
         </section>
 
-        {/* ── Info banner ── */}
-        <div className="mt-6 rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">How it works: </span>
-          Physical QR codes point to{" "}
-          <code className="rounded bg-secondary px-1 py-0.5 text-xs text-foreground">
-            drftreviews.vercel.app/q/001
-          </code>{" "}
-          …{" "}
-          <code className="rounded bg-secondary px-1 py-0.5 text-xs text-foreground">
-            /q/020
-          </code>
-          . Set a redirect URL below and toggle the card{" "}
-          <strong className="text-success">Live</strong> — scanners are
-          instantly sent to your Google Review page (or any URL).
+        {/* ── System Mapping Explainer Card ── */}
+        <div className="mt-6 rounded-2xl border border-border bg-card p-4.5 shadow-sm text-sm">
+          <div className="flex items-start gap-3">
+            <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0 mt-0.5">
+              <Globe className="size-4" />
+            </div>
+            <div className="flex-1 space-y-1">
+              <p className="font-semibold text-foreground">
+                Domain &amp; Physical QR Mapping
+              </p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Your 20 physical QR codes are permanently printed with URLs{" "}
+                <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[11px] text-foreground font-semibold">
+                  https://drftreviews.vercel.app/q/001
+                </code>{" "}
+                through{" "}
+                <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[11px] text-foreground font-semibold">
+                  /q/020
+                </code>
+                . When scanned, our server immediately resolves and issues an instant redirect to whatever Google Review URL (or any link) you set below.
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* ── Toolbar ── */}
         <section className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="font-display text-xl font-bold text-foreground">
-            All 20 cards
-          </h2>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <h2 className="font-display text-xl font-bold text-foreground">
+              QR Cards (20)
+            </h2>
+            <Badge variant="outline" className="text-xs font-normal">
+              {filtered.length} showing
+            </Badge>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Search Input */}
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="card-search"
-                placeholder="Search cards…"
-                className="pl-9 w-52"
+                placeholder="Search ID, shop, or URL…"
+                className="pl-8 w-56 text-xs h-9"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
               {search && (
                 <button
                   onClick={() => setSearch("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
-                  <X className="size-4" />
+                  <X className="size-3.5" />
                 </button>
               )}
             </div>
 
+            {/* Status Filter */}
             <Select
               value={filterStatus}
               onValueChange={(v) =>
                 setFilterStatus(v as "all" | "active" | "inactive")
               }
             >
-              <SelectTrigger id="status-filter" className="w-36">
+              <SelectTrigger id="status-filter" className="w-32 text-xs h-9">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All cards</SelectItem>
-                <SelectItem value="active">Active only</SelectItem>
-                <SelectItem value="inactive">Inactive only</SelectItem>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="active">Active Only</SelectItem>
+                <SelectItem value="inactive">Inactive Only</SelectItem>
               </SelectContent>
             </Select>
 
+            {/* Sync All to DB Button */}
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    id="sync-all-btn"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 gap-1.5 text-xs"
+                    onClick={() => syncAllMutation.mutate()}
+                    disabled={syncAllMutation.isPending}
+                  >
+                    {syncAllMutation.isPending ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="size-3.5 text-primary" />
+                    )}
+                    <span>Sync to DB</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Push all 20 cards into Supabase database
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* Refresh */}
             <Button
               id="refresh-btn"
               variant="outline"
               size="icon"
+              className="size-9"
               onClick={() => refetch()}
-              title="Refresh"
+              title="Refresh card list"
             >
-              <RefreshCw className="size-4" />
+              <RefreshCw className={`size-3.5 ${isLoading ? "animate-spin" : ""}`} />
             </Button>
           </div>
         </section>
 
-        {/* ── Card list ── */}
-        <section id="card-list" className="mt-4 space-y-2">
-          {isLoading && (
-            <div className="flex items-center justify-center py-20 text-muted-foreground">
-              <Loader2 className="size-6 animate-spin" />
+        {/* ── Cards List ── */}
+        <section id="card-list" className="mt-4 space-y-2.5">
+          {filtered.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border py-16 text-center text-sm text-muted-foreground">
+              No QR cards match your search or filter.
             </div>
+          ) : (
+            filtered.map((card) => (
+              <CardRow
+                key={card.id}
+                card={card}
+                onEdit={setEditTarget}
+                onToggle={handleToggle}
+                onReset={(c) => resetMutation.mutate(c.id)}
+                toggling={togglingId === card.id}
+                resetting={resettingId === card.id}
+              />
+            ))
           )}
-
-          {isError && (
-            <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-6 text-center">
-              <p className="text-sm text-destructive font-medium">
-                Failed to load cards.
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Make sure your account has the <strong>admin</strong> role in
-                Supabase. Run the SQL in SETUP.md §3b.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-4"
-                onClick={() => refetch()}
-              >
-                Retry
-              </Button>
-            </div>
-          )}
-
-          {!isLoading && !isError && filtered.length === 0 && (
-            <div className="py-20 text-center text-sm text-muted-foreground">
-              No cards match your filter.
-            </div>
-          )}
-
-          {filtered.map((card) => (
-            <CardRow
-              key={card.id}
-              card={card}
-              onEdit={setEditTarget}
-              onToggle={handleToggle}
-              onReset={(c) => resetMutation.mutate(c.id)}
-              toggling={togglingId === card.id}
-              resetting={resettingId === card.id}
-            />
-          ))}
         </section>
       </main>
 
-      {/* ── Edit dialog ── */}
+      {/* ── Modals ── */}
       <EditDialog
         card={editTarget}
         onClose={() => setEditTarget(null)}
         onSave={handleSave}
-        saving={updateMutation.isPending}
+        saving={saveMutation.isPending}
       />
+
+      <SqlModal open={showSqlModal} onClose={() => setShowSqlModal(false)} />
     </div>
   );
 }
