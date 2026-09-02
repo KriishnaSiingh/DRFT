@@ -720,7 +720,7 @@ function AdminPage() {
         id,
         shop_name: preset ? preset.shop_name : null,
         destination_url: preset ? preset.url : null,
-        status: preset ? ("active" as const) : ("inactive" as const),
+        status: "inactive" as const,
         scan_count: 0,
         last_scanned_at: null,
         created_at: new Date().toISOString(),

@@ -4,7 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { useEffect } from "react";
 
 import { supabase } from "@/lib/supabase";
-import { isValidCardId, deviceTypeFromUserAgent, getDefaultReviewLink } from "@/lib/qr-config";
+import { isValidCardId, deviceTypeFromUserAgent } from "@/lib/qr-config";
 
 /**
  * Public QR scan endpoint — /q/:id
@@ -14,9 +14,9 @@ import { isValidCardId, deviceTypeFromUserAgent, getDefaultReviewLink } from "@/
  *
  * Flow:
  *  1. Validate card ID format (001–020).
- *  2. Resolve destination from Supabase (RPC resolve_and_log_scan or fallback direct lookup).
- *  3. Issue HTTP 307 redirect immediately (server-side).
- *  4. Fallback client-side redirect in component with <meta http-equiv="refresh">.
+ *  2. Check card status in Supabase. If inactive or no URL, return null (go to /unassigned).
+ *  3. If active, log the scan via RPC and issue HTTP 307 redirect immediately.
+ *  4. Fallback client-side redirect in component with useEffect.
  */
 
 const resolveCard = createServerFn({ method: "GET" })
@@ -29,7 +29,44 @@ const resolveCard = createServerFn({ method: "GET" })
     const ua = getRequestHeader("user-agent") ?? null;
     const deviceType = deviceTypeFromUserAgent(ua);
 
-    // 1. Call RPC resolve_and_log_scan to log scan & retrieve destination URL
+    // 1. Direct check from Supabase qr_cards table
+    try {
+      const { data: card, error: cardError } = await supabase
+        .from("qr_cards")
+        .select("destination_url, status")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (!cardError && card) {
+        // Strict check: if card is NOT active, DO NOT redirect
+        if (card.status !== "active" || !card.destination_url) {
+          return { destination: null, error: "inactive" };
+        }
+
+        // Card is active: log the scan in background and return destination
+        Promise.resolve(
+          supabase.rpc("resolve_and_log_scan", {
+            p_card_id: id,
+            p_device_type: deviceType,
+            p_user_agent: ua,
+          }),
+        )
+          .then(({ error }) => {
+            if (error) {
+              console.error("[q.$id] resolve_and_log_scan error:", error.message);
+            }
+          })
+          .catch((err: unknown) => {
+            console.error("[q.$id] RPC catch:", err);
+          });
+
+        return { destination: card.destination_url, error: null };
+      }
+    } catch (e) {
+      console.error("[q.$id] DB query failed:", e);
+    }
+
+    // 2. If direct check didn't return a card, call resolve_and_log_scan RPC
     try {
       const { data, error } = await supabase.rpc("resolve_and_log_scan", {
         p_card_id: id,
@@ -41,34 +78,11 @@ const resolveCard = createServerFn({ method: "GET" })
         return { destination: data as string, error: null };
       }
     } catch (e) {
-      console.error("[q.$id] RPC resolve_and_log_scan failed:", e);
+      console.error("[q.$id] RPC failed:", e);
     }
 
-    // 2. Fallback direct table query in case RPC wasn't created yet in DB
-    try {
-      const { data: card } = await supabase
-        .from("qr_cards")
-        .select("destination_url, status")
-        .eq("id", id)
-        .maybeSingle();
-
-      if (card && card.status === "active" && card.destination_url) {
-        return { destination: card.destination_url, error: null };
-      }
-    } catch (e) {
-      console.error("[q.$id] direct query failed:", e);
-    }
-
-    // 3. Fallback to default Google Review link if card 001 or 002
-    const defaultLink = getDefaultReviewLink(id);
-    if (defaultLink) {
-      return {
-        destination: defaultLink.url,
-        error: null,
-      };
-    }
-
-    return { destination: null, error: "not_active" };
+    // Card is inactive, unassigned, or not found
+    return { destination: null, error: "inactive" };
   });
 
 export const Route = createFileRoute("/q/$id")({
@@ -84,6 +98,7 @@ export const Route = createFileRoute("/q/$id")({
       throw redirect({ href: destination });
     }
 
+    // When card is inactive or has no destination, redirect to /unassigned
     throw redirect({
       to: "/unassigned",
       search: { id: params.id },
@@ -99,7 +114,7 @@ export const Route = createFileRoute("/q/$id")({
 });
 
 function RedirectPage() {
-  const { destination, error } = Route.useLoaderData() as {
+  const { destination } = Route.useLoaderData() as {
     destination: string | null;
     error: string | null;
   };
@@ -134,7 +149,7 @@ function RedirectPage() {
         </svg>
       </div>
       <p className="mt-4 font-display text-lg font-semibold text-foreground">
-        Redirecting to Google Reviews…
+        {destination ? "Redirecting…" : "Card Not Yet Active"}
       </p>
       <p className="mt-1 text-sm text-muted-foreground">Card #{id}</p>
       {destination && (
