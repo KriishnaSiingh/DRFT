@@ -1,6 +1,6 @@
 # SETUP — QR Routing Manager
 
-A TanStack Start (React + Vite + Nitro) app that turns 20 printed QR cards into
+A TanStack Start (React + Vite + Nitro) app that turns 50 printed QR cards into
 dynamically routable links backed by Supabase.
 
 ---
@@ -33,7 +33,7 @@ npm install
 
 This creates:
 
-- `public.qr_cards` — the 20 fixed card rows (`001`–`020`), seeded as `inactive`
+- `public.qr_cards` — the 50 fixed card rows (`001`–`050`), seeded as `inactive`
 - `public.qr_scans` — one row per scan
 - `public.user_roles` — maps users to `admin` / `user` roles
 - `public.resolve_and_log_scan()` — callable by `anon`; resolves a card and logs the scan
@@ -99,12 +99,11 @@ Cards **001** and **002** are pre-mapped to your two Google Review links:
 | 001  | `https://search.google.com/local/writereview?placeid=ChIJK7BfLrErCTkRvBd4rfs6X8g` |
 | 002  | `https://search.google.com/local/writereview?placeid=ChIJUStYgL7pDDkRW8zAWxQ3Rhc` |
 
-The QR code images are in `src/assests/20QRs-DRFT/QR1.png` through `QR20.png`.
-QR1 encodes `<your-domain>/api/public/q/001`, QR2 encodes `.../002`, etc.
+The QR code images are in `src/assests/QRs/QR1.png` through `QR50.png`.
+QR1 encodes `https://drftreviews.vercel.app/q/001` ... QR50 encodes `https://drftreviews.vercel.app/q/050`.
 
-To activate them instantly, sign in as admin and click **Seed cards 001 & 002**
-in the dashboard toolbar. This sets the destination URLs and flips both cards to
-`active` in one click.
+To edit or activate destinations, sign in as admin and click **Edit** on any card
+in the dashboard toolbar.
 
 ---
 

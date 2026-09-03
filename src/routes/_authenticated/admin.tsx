@@ -363,7 +363,7 @@ function EditDialog({ card, onClose, onSave, saving }: EditDialogProps) {
 
 const SCHEMA_SQL = `-- DRFT QR Router Schema for Supabase
 create table if not exists public.qr_cards (
-  id text primary key check (id ~ '^0(0[1-9]|1[0-9]|20)$'),
+  id text primary key check (id ~ '^0(0[1-9]|[1-4][0-9]|50)$'),
   shop_name text,
   destination_url text,
   status text not null default 'inactive' check (status in ('active', 'inactive')),
@@ -372,6 +372,10 @@ create table if not exists public.qr_cards (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Ensure existing tables update check constraint to allow 001 to 050
+alter table public.qr_cards drop constraint if exists qr_cards_id_check;
+alter table public.qr_cards add constraint qr_cards_id_check check (id ~ '^0(0[1-9]|[1-4][0-9]|50)$');
 
 grant all on public.qr_cards to authenticated;
 grant all on public.qr_cards to service_role;
@@ -440,9 +444,9 @@ on conflict (id) do update set
   status = excluded.status,
   shop_name = coalesce(public.qr_cards.shop_name, excluded.shop_name);
 
--- Seed Remaining Cards 003 to 020
+-- Seed Remaining Cards 003 to 050
 insert into public.qr_cards (id, status)
-select to_char(n, 'FM000'), 'inactive' from generate_series(3, 20) as n
+select to_char(n, 'FM000'), 'inactive' from generate_series(3, 50) as n
 on conflict (id) do nothing;
 `;
 
@@ -706,7 +710,7 @@ function AdminPage() {
     refetch,
   } = useQuery({ queryKey: ["qr_cards"], queryFn: fetchCardsFromDb });
 
-  // Merge with fixed 20 CARD_IDS to ensure all 20 cards are ALWAYS visible & editable
+  // Merge with fixed 50 CARD_IDS to ensure all 50 cards are ALWAYS visible & editable
   const allCards: QrCard[] = useMemo(() => {
     const dbMap = new Map(dbCards.map((c) => [c.id, c]));
 
@@ -806,7 +810,7 @@ function AdminPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("All 20 cards synchronized with Supabase!");
+      toast.success("All 50 cards synchronized with Supabase!");
       qc.invalidateQueries({ queryKey: ["qr_cards"] });
     },
     onError: (err: unknown) => {
@@ -946,13 +950,13 @@ function AdminPage() {
             <div className="flex-1 space-y-1">
               <p className="font-semibold text-foreground">Domain &amp; Physical QR Mapping</p>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Your 20 physical QR codes are permanently printed with URLs{" "}
+                Your 50 physical QR codes are permanently printed with URLs{" "}
                 <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[11px] text-foreground font-semibold">
                   https://drftreviews.vercel.app/q/001
                 </code>{" "}
                 through{" "}
                 <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[11px] text-foreground font-semibold">
-                  /q/020
+                  /q/050
                 </code>
                 . When scanned, our server immediately resolves and issues an instant redirect to
                 whatever Google Review URL (or any link) you set below.
@@ -964,7 +968,7 @@ function AdminPage() {
         {/* ── Toolbar ── */}
         <section className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
-            <h2 className="font-display text-xl font-bold text-foreground">QR Cards (20)</h2>
+            <h2 className="font-display text-xl font-bold text-foreground">QR Cards (50)</h2>
             <Badge variant="outline" className="text-xs font-normal">
               {filtered.length} showing
             </Badge>
@@ -1026,7 +1030,7 @@ function AdminPage() {
                     <span>Sync to DB</span>
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Push all 20 cards into Supabase database</TooltipContent>
+                <TooltipContent>Push all 50 cards into Supabase database</TooltipContent>
               </Tooltip>
             </TooltipProvider>
 

@@ -21,7 +21,7 @@ function NotFoundComponent() {
         <h1 className="mt-3 text-6xl font-bold text-foreground">404</h1>
         <h2 className="mt-3 text-lg font-semibold text-foreground">This QR code isn't valid</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Card IDs run from 001 to 020. Check the code printed on your card, or ask the shop owner
+          Card IDs run from 001 to 050. Check the code printed on your card, or ask the shop owner
           for a fresh one.
         </p>
         <div className="mt-6">

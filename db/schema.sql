@@ -8,9 +8,9 @@
 -- Safe to re-run anytime (idempotent).
 -- =============================================================================
 
--- 1. Create QR Cards table (20 fixed physical cards: '001' to '020')
+-- 1. Create QR Cards table (50 fixed physical cards: '001' to '050')
 create table if not exists public.qr_cards (
-  id text primary key check (id ~ '^0(0[1-9]|1[0-9]|20)$'),
+  id text primary key check (id ~ '^0(0[1-9]|[1-4][0-9]|50)$'),
   shop_name text,
   destination_url text,
   status text not null default 'inactive' check (status in ('active', 'inactive')),
@@ -19,6 +19,10 @@ create table if not exists public.qr_cards (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Ensure existing tables update check constraint to allow 001 to 050
+alter table public.qr_cards drop constraint if exists qr_cards_id_check;
+alter table public.qr_cards add constraint qr_cards_id_check check (id ~ '^0(0[1-9]|[1-4][0-9]|50)$');
 
 -- Permissions
 grant all on public.qr_cards to authenticated;
@@ -158,7 +162,7 @@ on conflict (id) do update set
   status = excluded.status,
   shop_name = coalesce(public.qr_cards.shop_name, excluded.shop_name);
 
--- Pre-seed remaining Cards 003 to 020 as inactive:
+-- Pre-seed remaining Cards 003 to 050 as inactive:
 insert into public.qr_cards (id, status)
-select to_char(n, 'FM000'), 'inactive' from generate_series(3, 20) as n
+select to_char(n, 'FM000'), 'inactive' from generate_series(3, 50) as n
 on conflict (id) do nothing;

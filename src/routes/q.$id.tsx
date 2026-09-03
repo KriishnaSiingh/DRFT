@@ -10,10 +10,10 @@ import { isValidCardId, deviceTypeFromUserAgent } from "@/lib/qr-config";
  * Public QR scan endpoint — /q/:id
  *
  * Physical QR codes are printed with:
- *   https://drftreviews.vercel.app/q/001 ... https://drftreviews.vercel.app/q/020
+ *   https://drftreviews.vercel.app/q/001 ... https://drftreviews.vercel.app/q/050
  *
  * Flow:
- *  1. Validate card ID format (001–020).
+ *  1. Validate card ID format (001–050).
  *  2. Check card status in Supabase. If inactive or no URL, return null (go to /unassigned).
  *  3. If active, log the scan via RPC and issue HTTP 307 redirect immediately.
  *  4. Fallback client-side redirect in component with useEffect.

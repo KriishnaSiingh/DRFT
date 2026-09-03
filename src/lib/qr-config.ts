@@ -14,8 +14,8 @@ export const SUPABASE_PUBLISHABLE_KEY =
   (import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] as string | undefined) ??
   "sb_publishable_bTgv2XRwcNZUNhlnSopZSg_qiRV0ine";
 
-/** The 20 fixed card IDs: "001" … "020". */
-export const CARD_IDS: readonly string[] = Array.from({ length: 20 }, (_, i) =>
+/** The 50 fixed card IDs: "001" … "050". */
+export const CARD_IDS: readonly string[] = Array.from({ length: 50 }, (_, i) =>
   String(i + 1).padStart(3, "0"),
 );
 
@@ -48,7 +48,7 @@ export function getDefaultReviewLink(
 }
 
 export function isValidCardId(id: string): boolean {
-  return /^0(0[1-9]|1[0-9]|20)$/.test(id);
+  return /^0(0[1-9]|[1-4][0-9]|50)$/.test(id);
 }
 
 export type CardStatus = "active" | "inactive";

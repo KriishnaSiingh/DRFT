@@ -9,13 +9,13 @@ import { useAuth } from "@/hooks/use-auth";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "QR Routing Manager — 20 dynamic review cards" },
+      { title: "QR Routing Manager — 50 dynamic review cards" },
       {
         name: "description",
         content:
-          "Manage 20 fixed QR cards from your phone: point each card at any review link, toggle it live, and track every scan.",
+          "Manage 50 fixed QR cards from your phone: point each card at any review link, toggle it live, and track every scan.",
       },
-      { property: "og:title", content: "QR Routing Manager — 20 dynamic review cards" },
+      { property: "og:title", content: "QR Routing Manager — 50 dynamic review cards" },
       {
         property: "og:description",
         content:
@@ -49,7 +49,7 @@ function Landing() {
       <main className="mx-auto max-w-5xl px-5 pb-20">
         <section className="pt-8 pb-14 sm:pt-16">
           <p className="font-display text-xs tracking-[0.2em] text-primary uppercase">
-            20 fixed cards · infinite destinations
+            50 fixed cards · infinite destinations
           </p>
           <h1 className="mt-4 text-4xl leading-tight font-bold text-foreground sm:text-6xl">
             Print once.
@@ -104,7 +104,7 @@ function Landing() {
         <section className="mt-12 rounded-2xl border border-border bg-card p-5">
           <h2 className="text-base font-semibold text-card-foreground">The card range</h2>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Twenty permanent slugs, ready to print.
+            Fifty permanent slugs, ready to print.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             {CARD_IDS.map((id) => (
